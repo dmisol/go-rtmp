@@ -8,8 +8,8 @@
 package rtmp
 
 import (
-	"github.com/yutopp/go-rtmp/internal"
-	"github.com/yutopp/go-rtmp/message"
+	"github.com/dmisol/go-rtmp/internal"
+	"github.com/dmisol/go-rtmp/message"
 )
 
 var _ stateHandler = (*clientControlNotConnectedHandler)(nil)

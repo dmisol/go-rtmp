@@ -1,9 +1,10 @@
-module github.com/yutopp/go-rtmp
+module github.com/dmisol/go-rtmp
 
 go 1.13
 
 require (
 	github.com/fortytw2/leaktest v1.2.0
+	github.com/google/uuid v1.3.0
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.0
 	github.com/mitchellh/mapstructure v1.4.1

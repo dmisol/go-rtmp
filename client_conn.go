@@ -8,13 +8,14 @@
 package rtmp
 
 import (
+	"log"
 	"net"
 	"sync"
 
 	"github.com/pkg/errors"
 
-	"github.com/yutopp/go-rtmp/handshake"
-	"github.com/yutopp/go-rtmp/message"
+	"github.com/dmisol/go-rtmp/handshake"
+	"github.com/dmisol/go-rtmp/message"
 )
 
 // ClientConn A wrapper of a connection. It prorives client-side specific features.
@@ -101,6 +102,47 @@ func (cc *ClientConn) CreateStream(body *message.NetConnectionCreateStream, chun
 	newStream, err := cc.conn.streams.Create(result.StreamID)
 	if err != nil {
 		return nil, err
+	}
+
+	return newStream, nil
+}
+
+func (cc *ClientConn) CreateAndPublish(body *message.NetStreamPublish, chunkSize uint32) (*Stream, error) {
+	if err := cc.controllable(); err != nil {
+		return nil, err
+	}
+
+	stream, err := cc.conn.streams.At(ControlStreamID)
+	if err != nil {
+		return nil, err
+	}
+
+	rel := &message.NetConnectionReleaseStream{
+		StreamName: body.PublishingName,
+	}
+	stream.WriteCommandMessage(3, 0, "releaseStream", 2, rel)
+
+	fcp := &message.NetStreamFCPublish{
+		StreamName: body.PublishingName,
+	}
+
+	stream.WriteCommandMessage(3, 0, "FCPublish", 3, fcp)
+
+	result, err := stream.CreateStream(nil, chunkSize)
+	if err != nil {
+		return nil, err // TODO: wrap an error
+	}
+
+	// TODO: check result
+
+	newStream, err := cc.conn.streams.Create(result.StreamID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = newStream.Publish(body); err != nil {
+		log.Println("publish", err)
+		return newStream, err
 	}
 
 	return newStream, nil

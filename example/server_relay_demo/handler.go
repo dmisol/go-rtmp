@@ -2,13 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"log"
 
+	rtmp "github.com/dmisol/go-rtmp"
+	rtmpmsg "github.com/dmisol/go-rtmp/message"
 	"github.com/pkg/errors"
 	flvtag "github.com/yutopp/go-flv/tag"
-	"github.com/yutopp/go-rtmp"
-	rtmpmsg "github.com/yutopp/go-rtmp/message"
 )
 
 var _ rtmp.Handler = (*Handler)(nil)
@@ -23,7 +24,7 @@ type Handler struct {
 
 	//
 	pub *Pub
-	sub *Sub
+	sub *SubIn
 }
 
 func (h *Handler) OnServe(conn *rtmp.Conn) {
@@ -31,21 +32,21 @@ func (h *Handler) OnServe(conn *rtmp.Conn) {
 }
 
 func (h *Handler) OnConnect(timestamp uint32, cmd *rtmpmsg.NetConnectionConnect) error {
-	log.Printf("OnConnect: %#v", cmd)
-
-	// TODO: check app name to distinguish stream names per apps
-	// cmd.Command.App
+	log.Println("handler onConnect", cmd)
+	args, _ := cmd.ToArgs(rtmpmsg.EncodingTypeAMF3) // arg is ignored
+	log.Println("handler onConnect:", args)
+	arg := args[0].(rtmpmsg.NetConnectionConnectCommand)
+	log.Println(arg.FlashVer)
 
 	return nil
 }
 
 func (h *Handler) OnCreateStream(timestamp uint32, cmd *rtmpmsg.NetConnectionCreateStream) error {
-	log.Printf("OnCreateStream: %#v", cmd)
 	return nil
 }
 
 func (h *Handler) OnPublish(_ *rtmp.StreamContext, timestamp uint32, cmd *rtmpmsg.NetStreamPublish) error {
-	log.Printf("OnPublish: %#v", cmd)
+	log.Println("handler onPublish", cmd)
 
 	if h.sub != nil {
 		return errors.New("Cannot publish to this stream")
@@ -68,25 +69,38 @@ func (h *Handler) OnPublish(_ *rtmp.StreamContext, timestamp uint32, cmd *rtmpms
 	return nil
 }
 
-func (h *Handler) OnPlay(ctx *rtmp.StreamContext, timestamp uint32, cmd *rtmpmsg.NetStreamPlay) error {
+func (h *Handler) OnPlay(ctx *rtmp.StreamContext, timestamp uint32, cmd *rtmpmsg.NetStreamPlay) (err error) {
+	//log.Println("onPlay()")
 	if h.sub != nil {
-		return errors.New("Cannot play on this stream")
+		err = errors.New("Cannot play on this stream")
+		log.Println(err)
+		return
 	}
 
 	pubsub, err := h.relayService.GetPubsub(cmd.StreamName)
 	if err != nil {
-		return errors.Wrap(err, "Failed to get pubsub")
+		err = errors.Wrap(err, "Failed to get pubsub")
+		log.Println(err)
+		return
 	}
 
-	sub := pubsub.Sub()
-	sub.eventCallback = onEventCallback(h.conn, ctx.StreamID)
+	//sub := pubsub.NewSub(onEventCallback(h.conn, ctx.StreamID))
+	sub := pubsub.NewSub(onEventCallback(func(chunkStreamID int, ts uint32, rm rtmpmsg.Message) error {
+		ch := &rtmp.ChunkMessage{
+			StreamID: ctx.StreamID,
+			Message:  rm,
+		}
+		return h.conn.Write(context.Background(), chunkStreamID, ts, ch)
+	}))
 
 	h.sub = sub
-
+	//log.Println("onPlay() succeed")
 	return nil
 }
 
 func (h *Handler) OnSetDataFrame(timestamp uint32, data *rtmpmsg.NetStreamSetDataFrame) error {
+	log.Println("onSetDataFrame()")
+
 	r := bytes.NewReader(data.Payload)
 
 	var script flvtag.ScriptData
@@ -94,8 +108,6 @@ func (h *Handler) OnSetDataFrame(timestamp uint32, data *rtmpmsg.NetStreamSetDat
 		log.Printf("Failed to decode script data: Err = %+v", err)
 		return nil // ignore
 	}
-
-	log.Printf("SetDataFrame: Script = %#v", script)
 
 	_ = h.pub.Publish(&flvtag.FlvTag{
 		TagType:   flvtag.TagTypeScriptData,
@@ -150,8 +162,6 @@ func (h *Handler) OnVideo(timestamp uint32, payload io.Reader) error {
 }
 
 func (h *Handler) OnClose() {
-	log.Printf("OnClose")
-
 	if h.pub != nil {
 		_ = h.pub.Close()
 	}

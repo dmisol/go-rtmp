@@ -1,0 +1,3 @@
+rtmpsffmpeg: -re -f flv -listen 1 -i rtmp://localhost:%d/stream -c:a copy -ac 1 -ar 44100 -b:a 96k -vcodec copy -tune zerolatency -f flv %s
+rtmpdelay: 1000
+relayformat: -i rtmp://localhost/appname/%s -c:a copy -vcodec copy -tune zerolatency -f flv %s

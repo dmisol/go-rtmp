@@ -2,19 +2,21 @@ package main
 
 import (
 	"bytes"
-	"context"
+	"log"
 
+	rtmpmsg "github.com/dmisol/go-rtmp/message"
 	flvtag "github.com/yutopp/go-flv/tag"
-	"github.com/yutopp/go-rtmp"
-	rtmpmsg "github.com/yutopp/go-rtmp/message"
 )
 
-func onEventCallback(conn *rtmp.Conn, streamID uint32) func(flv *flvtag.FlvTag) error {
+type msgWriter func(int, uint32, rtmpmsg.Message) error
+
+func onEventCallback(wr msgWriter) func(flv *flvtag.FlvTag) error {
 	return func(flv *flvtag.FlvTag) error {
 		buf := new(bytes.Buffer)
 
 		switch flv.Data.(type) {
 		case *flvtag.AudioData:
+			log.Println("audio")
 			d := flv.Data.(*flvtag.AudioData)
 
 			// Consume flv payloads (d)
@@ -22,17 +24,12 @@ func onEventCallback(conn *rtmp.Conn, streamID uint32) func(flv *flvtag.FlvTag) 
 				return err
 			}
 
-			// TODO: Fix these values
-			ctx := context.Background()
-			chunkStreamID := 5
-			return conn.Write(ctx, chunkStreamID, flv.Timestamp, &rtmp.ChunkMessage{
-				StreamID: streamID,
-				Message: &rtmpmsg.AudioMessage{
-					Payload: buf,
-				},
-			})
-
+			msg := &rtmpmsg.AudioMessage{
+				Payload: buf,
+			}
+			return wr(5, flv.Timestamp, msg)
 		case *flvtag.VideoData:
+			log.Println("video")
 			d := flv.Data.(*flvtag.VideoData)
 
 			// Consume flv payloads (d)
@@ -40,17 +37,12 @@ func onEventCallback(conn *rtmp.Conn, streamID uint32) func(flv *flvtag.FlvTag) 
 				return err
 			}
 
-			// TODO: Fix these values
-			ctx := context.Background()
-			chunkStreamID := 6
-			return conn.Write(ctx, chunkStreamID, flv.Timestamp, &rtmp.ChunkMessage{
-				StreamID: streamID,
-				Message: &rtmpmsg.VideoMessage{
-					Payload: buf,
-				},
-			})
-
+			msg := &rtmpmsg.VideoMessage{
+				Payload: buf,
+			}
+			return wr(6, flv.Timestamp, msg)
 		case *flvtag.ScriptData:
+			log.Println("script")
 			d := flv.Data.(*flvtag.ScriptData)
 
 			// Consume flv payloads (d)
@@ -67,18 +59,12 @@ func onEventCallback(conn *rtmp.Conn, streamID uint32) func(flv *flvtag.FlvTag) 
 				return err
 			}
 
-			// TODO: Fix these values
-			ctx := context.Background()
-			chunkStreamID := 8
-			return conn.Write(ctx, chunkStreamID, flv.Timestamp, &rtmp.ChunkMessage{
-				StreamID: streamID,
-				Message: &rtmpmsg.DataMessage{
-					Name:     "@setDataFrame", // TODO: fix
-					Encoding: rtmpmsg.EncodingTypeAMF0,
-					Body:     amdBuf,
-				},
-			})
-
+			msg := &rtmpmsg.DataMessage{
+				Name:     "@setDataFrame", // TODO: fix
+				Encoding: rtmpmsg.EncodingTypeAMF0,
+				Body:     amdBuf,
+			}
+			return wr(8, flv.Timestamp, msg)
 		default:
 			panic("unreachable")
 		}

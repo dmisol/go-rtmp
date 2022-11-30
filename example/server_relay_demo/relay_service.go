@@ -8,22 +8,24 @@ import (
 // TODO: Create this service per apps.
 // In this example, this instance is singleton.
 type RelayService struct {
+	mu      sync.Mutex
 	streams map[string]*Pubsub
-	m       sync.Mutex
+	srv     *RelayServer
 }
 
-func NewRelayService() *RelayService {
+func NewRelayService(srv *RelayServer) *RelayService {
 	return &RelayService{
 		streams: make(map[string]*Pubsub),
+		srv:     srv,
 	}
 }
 
 func (s *RelayService) NewPubsub(key string) (*Pubsub, error) {
-	s.m.Lock()
-	defer s.m.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if _, ok := s.streams[key]; ok {
-		return nil, fmt.Errorf("Already published: %s", key)
+		return nil, fmt.Errorf("already published: %s", key)
 	}
 
 	pubsub := NewPubsub(s, key)
@@ -34,23 +36,23 @@ func (s *RelayService) NewPubsub(key string) (*Pubsub, error) {
 }
 
 func (s *RelayService) GetPubsub(key string) (*Pubsub, error) {
-	s.m.Lock()
-	defer s.m.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	pubsub, ok := s.streams[key]
 	if !ok {
-		return nil, fmt.Errorf("Not published: %s", key)
+		return nil, fmt.Errorf("get(), not published: %s", key)
 	}
 
 	return pubsub, nil
 }
 
 func (s *RelayService) RemovePubsub(key string) error {
-	s.m.Lock()
-	defer s.m.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if _, ok := s.streams[key]; !ok {
-		return fmt.Errorf("Not published: %s", key)
+		return fmt.Errorf("remove(), not published: %s", key)
 	}
 
 	delete(s.streams, key)

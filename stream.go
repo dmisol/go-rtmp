@@ -15,7 +15,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
-	"github.com/yutopp/go-rtmp/message"
+	"github.com/dmisol/go-rtmp/message"
 )
 
 // Stream represents a logical message stream
@@ -71,7 +71,7 @@ func (s *Stream) Connect(
 	}
 
 	chunkStreamID := 3 // TODO: fix
-	err = s.writeCommandMessage(
+	err = s.WriteCommandMessage(
 		chunkStreamID, 0, // Timestamp is 0
 		"connect",
 		transactionID,
@@ -121,7 +121,7 @@ func (s *Stream) ReplyConnect(
 		commandName = "_error"
 	}
 
-	return s.writeCommandMessage(
+	return s.WriteCommandMessage(
 		chunkStreamID, timestamp,
 		commandName,
 		1, // 7.2.1.2, flow.6
@@ -151,7 +151,7 @@ func (s *Stream) CreateStream(body *message.NetConnectionCreateStream, chunkSize
 	}
 
 	chunkStreamID := 3 // TODO: fix
-	err = s.writeCommandMessage(
+	err = s.WriteCommandMessage(
 		chunkStreamID, 0, // TODO: fix, Timestamp is 0
 		"createStream",
 		transactionID,
@@ -203,7 +203,7 @@ func (s *Stream) ReplyCreateStream(
 		}
 	}
 
-	return s.writeCommandMessage(
+	return s.WriteCommandMessage(
 		chunkStreamID, timestamp,
 		commandName,
 		transactionID,
@@ -219,7 +219,7 @@ func (s *Stream) Publish(
 	}
 
 	chunkStreamID := 3 // TODO: fix
-	return s.writeCommandMessage(
+	return s.WriteCommandMessage(
 		chunkStreamID, 0, // TODO: fix, Timestamp is 0
 		"publish",
 		int64(0), // Always 0, 7.2.2.6
@@ -232,7 +232,7 @@ func (s *Stream) NotifyStatus(
 	timestamp uint32,
 	body *message.NetStreamOnStatus,
 ) error {
-	return s.writeCommandMessage(
+	return s.WriteCommandMessage(
 		chunkStreamID, timestamp,
 		"onStatus",
 		0, // 7.2.2
@@ -244,7 +244,7 @@ func (s *Stream) Close() error {
 	return nil // TODO: implement
 }
 
-func (s *Stream) writeCommandMessage(
+func (s *Stream) WriteCommandMessage(
 	chunkStreamID int,
 	timestamp uint32,
 	commandName string,

@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"log"
 	"sync"
+	"sync/atomic"
 
 	flvtag "github.com/yutopp/go-flv/tag"
 )
@@ -12,7 +14,7 @@ type Pubsub struct {
 	name string
 
 	pub  *Pub
-	subs []*Sub
+	subs []SubGeneric
 
 	m sync.Mutex
 }
@@ -22,7 +24,7 @@ func NewPubsub(srv *RelayService, name string) *Pubsub {
 		srv:  srv,
 		name: name,
 
-		subs: make([]*Sub, 0),
+		subs: make([]SubGeneric, 0),
 	}
 }
 
@@ -47,11 +49,11 @@ func (pb *Pubsub) Pub() *Pub {
 	return pub
 }
 
-func (pb *Pubsub) Sub() *Sub {
+func (pb *Pubsub) NewSub(cb func(*flvtag.FlvTag) error) *SubIn {
 	pb.m.Lock()
 	defer pb.m.Unlock()
 
-	sub := &Sub{}
+	sub := &SubIn{eventCallback: cb}
 
 	// TODO: Implement more efficient resource management
 	pb.subs = append(pb.subs, sub)
@@ -59,22 +61,23 @@ func (pb *Pubsub) Sub() *Sub {
 	return sub
 }
 
+func (pb *Pubsub) Append(s SubGeneric) {
+	pb.m.Lock()
+	defer pb.m.Unlock()
+	pb.subs = append(pb.subs, s)
+}
+
 type Pub struct {
 	pb *Pubsub
 
 	avcSeqHeader *flvtag.FlvTag
 	lastKeyFrame *flvtag.FlvTag
+
+	scriptData *flvtag.FlvTag
 }
 
-// TODO: Should check codec types and so on.
-// In this example, checks only sequence headers and assume that AAC and AVC.
 func (p *Pub) Publish(flv *flvtag.FlvTag) error {
 	switch flv.Data.(type) {
-	case *flvtag.AudioData, *flvtag.ScriptData:
-		for _, sub := range p.pb.subs {
-			_ = sub.onEvent(cloneView(flv))
-		}
-
 	case *flvtag.VideoData:
 		d := flv.Data.(*flvtag.VideoData)
 		if d.AVCPacketType == flvtag.AVCPacketTypeSequenceHeader {
@@ -84,26 +87,43 @@ func (p *Pub) Publish(flv *flvtag.FlvTag) error {
 		if d.FrameType == flvtag.FrameTypeKeyFrame {
 			p.lastKeyFrame = flv
 		}
-
-		for _, sub := range p.pb.subs {
-			if !sub.initialized {
-				if p.avcSeqHeader != nil {
-					_ = sub.onEvent(cloneView(p.avcSeqHeader))
-				}
-				if p.lastKeyFrame != nil {
-					_ = sub.onEvent(cloneView(p.lastKeyFrame))
-				}
-				sub.initialized = true
-				continue
-			}
-
-			_ = sub.onEvent(cloneView(flv))
-		}
-
-	default:
-		panic("unexpected")
+	case *flvtag.ScriptData:
+		log.Println("store scriptData")
+		p.scriptData = flv
 	}
 
+	for _, sub := range p.pb.subs {
+		if !sub.IsInitialized() {
+			log.Println("init sequence")
+
+			if p.scriptData != nil {
+				log.Println(".. scriptData")
+				if err := sub.OnEvent(cloneView(p.scriptData)); err != nil {
+					log.Println("err", err)
+				}
+			} else {
+				log.Println("scriptData is nil")
+			}
+
+			if p.avcSeqHeader != nil {
+				log.Println(".. avcSeqHeader")
+				if err := sub.OnEvent(cloneView(p.avcSeqHeader)); err != nil {
+					log.Println("err", err)
+				}
+			} else {
+				log.Println("avcSeqHeader is nil")
+			}
+			if p.lastKeyFrame != nil {
+				log.Println(".. lastKeyFrame")
+				if err := sub.OnEvent(cloneView(p.lastKeyFrame)); err != nil {
+					log.Println("err,", err)
+				}
+			} else {
+				log.Println("lastKeyFrame is nil")
+			}
+		}
+		_ = sub.OnEvent(cloneView(flv))
+	}
 	return nil
 }
 
@@ -111,15 +131,21 @@ func (p *Pub) Close() error {
 	return p.pb.Deregister()
 }
 
-type Sub struct {
-	initialized bool
+type SubGeneric interface {
+	Close() error
+	OnEvent(*flvtag.FlvTag) error
+	IsInitialized() bool
+}
+
+type SubIn struct {
+	initialized int64
 	closed      bool
 
 	lastTimestamp uint32
 	eventCallback func(*flvtag.FlvTag) error
 }
 
-func (s *Sub) onEvent(flv *flvtag.FlvTag) error {
+func (s *SubIn) OnEvent(flv *flvtag.FlvTag) error {
 	if s.closed {
 		return nil
 	}
@@ -132,7 +158,7 @@ func (s *Sub) onEvent(flv *flvtag.FlvTag) error {
 	return s.eventCallback(flv)
 }
 
-func (s *Sub) Close() error {
+func (s *SubIn) Close() error {
 	if s.closed {
 		return nil
 	}
@@ -140,6 +166,15 @@ func (s *Sub) Close() error {
 	s.closed = true
 
 	return nil
+}
+
+func (s *SubIn) IsInitialized() (res bool) {
+	r := atomic.AddInt64(&s.initialized, 1)
+	res = true
+	if r == 1 {
+		res = false
+	}
+	return
 }
 
 func cloneView(flv *flvtag.FlvTag) *flvtag.FlvTag {

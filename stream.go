@@ -29,7 +29,7 @@ type Stream struct {
 	conn *Conn
 }
 
-func newStream(streamID uint32, conn *Conn) *Stream {
+func newStream(streamID uint32, conn *Conn, cb func()) *Stream {
 	s := &Stream{
 		streamID:     streamID,
 		encTy:        message.EncodingTypeAMF0, // Default AMF encoding type
@@ -41,6 +41,7 @@ func newStream(streamID uint32, conn *Conn) *Stream {
 		conn: conn,
 	}
 	s.handler = newStreamHandler(s)
+	s.handler.OnStatus = cb
 
 	return s
 }
@@ -140,7 +141,7 @@ func (s *Stream) CreateStream(body *message.NetConnectionCreateStream, chunkSize
 		}
 	}
 
-	transactionID := int64(2) // TODO: fix
+	transactionID := int64(4) // TODO: fix
 	t, err := s.transactions.Create(transactionID)
 	if err != nil {
 		return nil, err
@@ -222,7 +223,7 @@ func (s *Stream) Publish(
 	return s.WriteCommandMessage(
 		chunkStreamID, 0, // TODO: fix, Timestamp is 0
 		"publish",
-		int64(0), // Always 0, 7.2.2.6
+		5, //int64(0), // Always 0, 7.2.2.6
 		body,
 	)
 }

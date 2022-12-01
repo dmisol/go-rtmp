@@ -54,7 +54,7 @@ func NewSubOut(dest string) (s *SubOut, err error) {
 		// TODO: youtube test, remove hardcoded...
 		PublishingName: pn, //"bb57-3kj8-uz95-rb6s-bkzz",
 		PublishingType: "live",
-	}, chunkSize); err != nil {
+	}, chunkSize, s.onStatus); err != nil {
 		s.Println("createStream()", err)
 		return
 	}
@@ -82,6 +82,7 @@ type SubOut struct {
 	stream *rtmplib.Stream
 
 	initialized   int64
+	canPublish    int64
 	closed        bool
 	lastTimestamp uint32
 	eventCallback func(*flvtag.FlvTag) error
@@ -92,8 +93,18 @@ func (s *SubOut) wr(chunkStreamID int, ts uint32, rm rtmpmsg.Message) error {
 	return s.stream.Write(chunkStreamID, ts, rm)
 }
 
+func (s *SubOut) onStatus() {
+	atomic.AddInt64(&s.canPublish, 1)
+	s.Println("!!! reply to publish, onStatus")
+}
+
 func (s *SubOut) OnEvent(flv *flvtag.FlvTag) (err error) {
 	if s.closed {
+		return nil
+	}
+
+	r := atomic.LoadInt64(&s.initialized)
+	if r == 0 { // server is still not ready for the media
 		return nil
 	}
 
@@ -106,7 +117,13 @@ func (s *SubOut) OnEvent(flv *flvtag.FlvTag) (err error) {
 }
 
 func (s *SubOut) IsInitialized() (res bool) {
-	r := atomic.AddInt64(&s.initialized, 1)
+	r := atomic.LoadInt64(&s.canPublish)
+	if r == 0 {
+		res = false
+		return
+	}
+
+	r = atomic.AddInt64(&s.initialized, 1)
 	res = true
 	if r == 1 {
 		s.Println("init")

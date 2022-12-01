@@ -60,6 +60,8 @@ type streamHandler struct {
 
 	loggerEntry *logrus.Entry
 	m           sync.Mutex
+
+	OnStatus func()
 }
 
 // newEntryHandler Create an incomplete new instance of entryHandler.
@@ -186,8 +188,12 @@ func (h *streamHandler) handleCommand(
 		}
 
 		return nil
-
-		// TODO: Support onStatus
+	case "onStatus":
+		if h.OnStatus != nil {
+			h.OnStatus()
+		}
+		//log.Println("!!! reply to publish, onStatus")
+		return nil
 	}
 
 	amfDec := message.NewAMFDecoder(cmdMsg.Body, cmdMsg.Encoding)

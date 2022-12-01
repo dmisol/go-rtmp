@@ -2,14 +2,19 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net"
+	"os/exec"
+	"strings"
 	"sync"
 
 	//	log "github.com/sirupsen/logrus"
 	"github.com/dmisol/go-rtmp"
 )
+
+const useFfmpeg = false
 
 type RelayServer struct {
 	mu sync.Mutex
@@ -107,17 +112,23 @@ type Relay struct {
 }
 
 func (r *Relay) AddSink(dest string) {
+	if useFfmpeg {
+		r.mu.Lock()
+		defer r.mu.Unlock()
 
-	c, err := r.addDirectSink(dest)
-	if err != nil {
-		r.Println("adding sink", err)
-		return
+		r.sinkStops[dest] = r.addFfmpegSink(dest)
+	} else {
+		c, err := r.addDirectSink(dest)
+		if err != nil {
+			r.Println("adding sink", err)
+			return
+		}
+
+		r.mu.Lock()
+		defer r.mu.Unlock()
+
+		r.sinkStops[dest] = c
 	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	//r.sinkStops[dest] = r.addFfmpegSink(dest)
-	r.sinkStops[dest] = c
 
 	r.Println("add", dest)
 }
@@ -128,6 +139,8 @@ func (r *Relay) addDirectSink(dest string) (cancel func(), err error) {
 	// as SubOut matching SubGeneric
 
 	ctx, cancel := context.WithCancel(context.Background())
+
+	// todo: start go-routine here?
 	s, err := NewSubOut(dest)
 	if err != nil {
 		r.Println("client conn", err)
@@ -168,12 +181,11 @@ func (r *Relay) RemoveSink(dest string) {
 	r.Println("remove", dest)
 }
 
-/*
 func (r *Relay) addFfmpegSink(dest string) (cancel context.CancelFunc) {
 	ctx, c := context.WithCancel(r.ctx)
 	cancel = c
 
-	args := fmt.Sprintf(defs.Conf.RelayFormat, r.id, dest)
+	args := fmt.Sprintf("-i rtmp://localhost/appname/%s -c:a copy -vcodec copy -tune zerolatency -f flv %s", r.id, dest)
 	r.Println("ffmpeg", args)
 
 	a := strings.Split(args, " ")
@@ -187,7 +199,6 @@ func (r *Relay) addFfmpegSink(dest string) (cancel context.CancelFunc) {
 	}()
 	return
 }
-*/
 
 func (r *Relay) removaAll() {
 	r.mu.Lock()

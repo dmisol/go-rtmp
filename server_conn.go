@@ -31,7 +31,7 @@ func (sc *serverConn) Serve() error {
 		return errors.Wrap(err, "Failed to handshake")
 	}
 
-	ctrlStream, err := sc.conn.streams.Create(ControlStreamID)
+	ctrlStream, err := sc.conn.streams.Create(ControlStreamID, nil)
 	if err != nil {
 		return errors.Wrap(err, "Failed to create control stream")
 	}

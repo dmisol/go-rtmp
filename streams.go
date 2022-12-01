@@ -31,7 +31,7 @@ func newStreams(conn *Conn) *streams {
 	}
 }
 
-func (ss *streams) Create(streamID uint32) (*Stream, error) {
+func (ss *streams) Create(streamID uint32, cb func()) (*Stream, error) {
 	ss.m.Lock()
 	defer ss.m.Unlock()
 
@@ -46,14 +46,14 @@ func (ss *streams) Create(streamID uint32) (*Stream, error) {
 		)
 	}
 
-	ss.streams[streamID] = newStream(streamID, ss.conn)
+	ss.streams[streamID] = newStream(streamID, ss.conn, cb)
 
 	return ss.streams[streamID], nil
 }
 
 func (ss *streams) CreateIfAvailable() (*Stream, error) {
 	for i := 0; i < ss.conn.config.ControlState.MaxMessageStreams; i++ {
-		s, err := ss.Create(uint32(i))
+		s, err := ss.Create(uint32(i), nil)
 		if err != nil {
 			continue
 		}

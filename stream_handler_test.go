@@ -16,7 +16,7 @@ import (
 func TestStreamHandlerChangeState(t *testing.T) {
 	rwc := &rwcMock{}
 	c := newConn(rwc, nil)
-	s := newStream(42, c)
+	s := newStream(42, c, nil)
 
 	s.handler.ChangeState(streamStateUnknown)
 	assert.Equal(t, s.handler.state, streamStateUnknown)

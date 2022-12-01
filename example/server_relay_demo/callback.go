@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"log"
 
 	rtmpmsg "github.com/dmisol/go-rtmp/message"
 	flvtag "github.com/yutopp/go-flv/tag"
@@ -16,7 +15,7 @@ func onEventCallback(wr msgWriter) func(flv *flvtag.FlvTag) error {
 
 		switch flv.Data.(type) {
 		case *flvtag.AudioData:
-			log.Println("audio")
+			//log.Println("audio")
 			d := flv.Data.(*flvtag.AudioData)
 
 			// Consume flv payloads (d)
@@ -29,7 +28,7 @@ func onEventCallback(wr msgWriter) func(flv *flvtag.FlvTag) error {
 			}
 			return wr(5, flv.Timestamp, msg)
 		case *flvtag.VideoData:
-			log.Println("video")
+			//log.Println("video")
 			d := flv.Data.(*flvtag.VideoData)
 
 			// Consume flv payloads (d)
@@ -42,7 +41,7 @@ func onEventCallback(wr msgWriter) func(flv *flvtag.FlvTag) error {
 			}
 			return wr(6, flv.Timestamp, msg)
 		case *flvtag.ScriptData:
-			log.Println("script")
+			//log.Println("script")
 			d := flv.Data.(*flvtag.ScriptData)
 
 			// Consume flv payloads (d)

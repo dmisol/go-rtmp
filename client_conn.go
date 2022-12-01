@@ -34,7 +34,7 @@ func newClientConnWithSetup(c net.Conn, config *ConnConfig) (*ClientConn, error)
 		return nil, errors.Wrap(err, "Failed to handshake")
 	}
 
-	ctrlStream, err := conn.streams.Create(ControlStreamID)
+	ctrlStream, err := conn.streams.Create(ControlStreamID, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to create control stream")
 	}
@@ -99,7 +99,7 @@ func (cc *ClientConn) CreateStream(body *message.NetConnectionCreateStream, chun
 
 	// TODO: check result
 
-	newStream, err := cc.conn.streams.Create(result.StreamID)
+	newStream, err := cc.conn.streams.Create(result.StreamID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (cc *ClientConn) CreateStream(body *message.NetConnectionCreateStream, chun
 	return newStream, nil
 }
 
-func (cc *ClientConn) CreateAndPublish(body *message.NetStreamPublish, chunkSize uint32) (*Stream, error) {
+func (cc *ClientConn) CreateAndPublish(body *message.NetStreamPublish, chunkSize uint32, cb func()) (*Stream, error) {
 	if err := cc.controllable(); err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (cc *ClientConn) CreateAndPublish(body *message.NetStreamPublish, chunkSize
 
 	// TODO: check result
 
-	newStream, err := cc.conn.streams.Create(result.StreamID)
+	newStream, err := cc.conn.streams.Create(result.StreamID, cb)
 	if err != nil {
 		return nil, err
 	}
